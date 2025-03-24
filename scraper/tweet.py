@@ -18,6 +18,7 @@ class Tweet:
         self.card = card
         self.error = False
         self.tweet = None
+        self.has_media = 0
 
         try:
             self.user = card.find_element(
@@ -162,6 +163,26 @@ class Tweet:
         self.followers_cnt = "0"
         self.user_id = None
 
+        try:
+            media_containers = card.find_elements(
+                "xpath",
+                './/div[@data-testid="tweetPhoto"] | '
+                './/div[@data-testid="videoPlayer"] | '
+                './/div[contains(@data-testid, "videoComponent")]'
+            )
+            
+            media_urls = card.find_elements(
+                "xpath",
+                './/img[contains(@src, "twimg.com/media/")] | '
+                './/img[contains(@src, "ext_tw_video_thumb")] | '
+                './/video[contains(@src, "twimg.com")]'
+            )
+
+            self.has_media = 1 if (media_containers or media_urls) else 0
+        except Exception:
+            self.has_media = 0
+
+
         if scrape_poster_details:
             el_name = card.find_element(
                 "xpath", './/div[@data-testid="User-Name"]//span'
@@ -272,6 +293,7 @@ class Tweet:
             self.user_id,
             self.following_cnt,
             self.followers_cnt,
+            self.has_media,
         )
 
         pass

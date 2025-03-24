@@ -596,12 +596,14 @@ It may be due to the following:
             "Profile Image": [tweet[12] for tweet in self.data],
             "Tweet Link": [tweet[13] for tweet in self.data],
             "Tweet ID": [f"tweet_id:{tweet[14]}" for tweet in self.data],
+            "Has Media": [tweet[18] for tweet in self.data]
         }
 
         if self.scraper_details["poster_details"]:
-            data["Tweeter ID"] = [f"user_id:{tweet[15]}" for tweet in self.data]
-            data["Following"] = [tweet[16] for tweet in self.data]
-            data["Followers"] = [tweet[17] for tweet in self.data]
+             data["Tweeter ID"] = [f"user_id:{tweet[15]}" for tweet in self.data]
+             data["Following"] = [tweet[16] for tweet in self.data]
+             data["Followers"] = [tweet[17] for tweet in self.data]
+             
 
         df = pd.DataFrame(data)
 

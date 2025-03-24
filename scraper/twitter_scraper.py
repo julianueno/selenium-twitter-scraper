@@ -4,6 +4,7 @@ import pandas as pd
 from progress import Progress
 from scroller import Scroller
 from tweet import Tweet
+import csv 
 
 from datetime import datetime
 from fake_headers import Headers
@@ -610,8 +611,13 @@ It may be due to the following:
         current_time = now.strftime("%Y-%m-%d_%H-%M-%S")
         file_path = f"{folder_path}{current_time}_tweets_1-{len(self.data)}.csv"
         pd.set_option("display.max_colwidth", None)
-        df.to_csv(file_path, index=False, encoding="utf-8")
-
+        df.to_csv(
+            file_path, 
+            index=False, 
+            encoding='utf-8-sig', 
+            quoting=csv.QUOTE_ALL,
+            escapechar='\\'
+        )
         print("CSV Saved: {}".format(file_path))
 
         pass

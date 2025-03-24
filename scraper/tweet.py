@@ -5,6 +5,7 @@ from selenium.common.exceptions import (
 )
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.action_chains import ActionChains
+import unicodedata
 
 
 class Tweet:
@@ -20,29 +21,33 @@ class Tweet:
         self.tweet = None
         self.has_media = 0
 
+        # Helper function to safely extract text with Arabic support
+        def safe_extract_text(element):
+            try:
+                text = element.text
+                return unicodedata.normalize('NFC', text)
+            except:
+                try:
+                    return element.get_attribute('innerText') or element.get_attribute('textContent') or ""
+                except:
+                    return ""
+
+        # Extract basic tweet info
         try:
-            self.user = card.find_element(
-                "xpath", './/div[@data-testid="User-Name"]//span'
-            ).text
+            self.user = safe_extract_text(card.find_element("xpath", './/div[@data-testid="User-Name"]//span'))
         except NoSuchElementException:
             self.error = True
             self.user = "skip"
 
         try:
-            self.handle = card.find_element(
-                "xpath", './/span[contains(text(), "@")]'
-            ).text
+            self.handle = safe_extract_text(card.find_element("xpath", './/span[contains(text(), "@")]'))
         except NoSuchElementException:
             self.error = True
             self.handle = "skip"
 
         try:
-            self.date_time = card.find_element("xpath", ".//time").get_attribute(
-                "datetime"
-            )
-
-            if self.date_time is not None:
-                self.is_ad = False
+            self.date_time = card.find_element("xpath", ".//time").get_attribute("datetime")
+            self.is_ad = False if self.date_time else True
         except NoSuchElementException:
             self.is_ad = True
             self.error = True
@@ -51,137 +56,110 @@ class Tweet:
         if self.error:
             return
 
+        # Verification check
         try:
-            card.find_element(
-                "xpath", './/*[local-name()="svg" and @data-testid="icon-verified"]'
-            )
-
+            card.find_element("xpath", './/*[local-name()="svg" and @data-testid="icon-verified"]')
             self.verified = True
         except NoSuchElementException:
             self.verified = False
 
+        # Improved content extraction with Arabic support
         self.content = ""
-        contents = card.find_elements(
-            "xpath",
-            '(.//div[@data-testid="tweetText"])[1]/span | (.//div[@data-testid="tweetText"])[1]/a',
-        )
-
-        for index, content in enumerate(contents):
-            self.content += content.text
-
         try:
-            self.reply_cnt = card.find_element(
-                "xpath", './/button[@data-testid="reply"]//span'
-            ).text
-
-            if self.reply_cnt == "":
-                self.reply_cnt = "0"
+            text_container = card.find_element("xpath", '(.//div[@data-testid="tweetText"])[1]')
+            elements = text_container.find_elements("xpath", ".//*[self::span or self::a or self::img]")
+            
+            for element in elements:
+                try:
+                    if element.tag_name == "img" and "emoji" in element.get_attribute("src", ""):
+                        self.content += element.get_attribute("alt", "")
+                    else:
+                        self.content += safe_extract_text(element)
+                except:
+                    continue
+                    
+            self.content = unicodedata.normalize('NFC', self.content.strip())
         except NoSuchElementException:
-            self.reply_cnt = "0"
+            self.content = ""
 
+        # Engagement metrics
+        metrics = {
+            'reply_cnt': './/button[@data-testid="reply"]//span',
+            'retweet_cnt': './/button[@data-testid="retweet"]//span',
+            'like_cnt': './/button[@data-testid="like"]//span',
+            'analytics_cnt': './/a[contains(@href, "/analytics")]//span'
+        }
+        
+        for attr, xpath in metrics.items():
+            try:
+                value = safe_extract_text(card.find_element("xpath", xpath))
+                setattr(self, attr, value if value else "0")
+            except NoSuchElementException:
+                setattr(self, attr, "0")
+
+        # Tags and mentions
         try:
-            self.retweet_cnt = card.find_element(
-                "xpath", './/button[@data-testid="retweet"]//span'
-            ).text
-
-            if self.retweet_cnt == "":
-                self.retweet_cnt = "0"
-        except NoSuchElementException:
-            self.retweet_cnt = "0"
-
-        try:
-            self.like_cnt = card.find_element(
-                "xpath", './/button[@data-testid="like"]//span'
-            ).text
-
-            if self.like_cnt == "":
-                self.like_cnt = "0"
-        except NoSuchElementException:
-            self.like_cnt = "0"
-
-        try:
-            self.analytics_cnt = card.find_element(
-                "xpath", './/a[contains(@href, "/analytics")]//span'
-            ).text
-
-            if self.analytics_cnt == "":
-                self.analytics_cnt = "0"
-        except NoSuchElementException:
-            self.analytics_cnt = "0"
-
-        try:
-            self.tags = card.find_elements(
-                "xpath",
-                './/a[contains(@href, "src=hashtag_click")]',
-            )
-
-            self.tags = [tag.text for tag in self.tags]
+            self.tags = [safe_extract_text(tag) for tag in 
+                        card.find_elements("xpath", './/a[contains(@href, "src=hashtag_click")]')]
         except NoSuchElementException:
             self.tags = []
 
         try:
-            self.mentions = card.find_elements(
-                "xpath",
-                '(.//div[@data-testid="tweetText"])[1]//a[contains(text(), "@")]',
-            )
-
-            self.mentions = [mention.text for mention in self.mentions]
+            self.mentions = [safe_extract_text(mention) for mention in 
+                           card.find_elements("xpath", '(.//div[@data-testid="tweetText"])[1]//a[contains(text(), "@")]')]
         except NoSuchElementException:
             self.mentions = []
 
+        # Emojis
         try:
-            raw_emojis = card.find_elements(
-                "xpath",
-                '(.//div[@data-testid="tweetText"])[1]/img[contains(@src, "emoji")]',
-            )
-
             self.emojis = [
-                emoji.get_attribute("alt").encode("unicode-escape").decode("ASCII")
-                for emoji in raw_emojis
+                unicodedata.normalize('NFC', emoji.get_attribute("alt", ""))
+                for emoji in card.find_elements("xpath", '(.//div[@data-testid="tweetText"])[1]/img[contains(@src, "emoji")]')
             ]
         except NoSuchElementException:
             self.emojis = []
 
+        # Media and profile info
         try:
             self.profile_img = card.find_element(
                 "xpath", './/div[@data-testid="Tweet-User-Avatar"]//img'
-            ).get_attribute("src")
+            ).get_attribute("src") or ""
         except NoSuchElementException:
             self.profile_img = ""
 
         try:
-            self.tweet_link = self.card.find_element(
-                "xpath",
-                ".//a[contains(@href, '/status/')]",
-            ).get_attribute("href")
-            self.tweet_id = str(self.tweet_link.split("/")[-1])
+            self.tweet_link = card.find_element(
+                "xpath", ".//a[contains(@href, '/status/')]"
+            ).get_attribute("href") or ""
+            self.tweet_id = str(self.tweet_link.split("/")[-1]) if self.tweet_link else ""
         except NoSuchElementException:
             self.tweet_link = ""
             self.tweet_id = ""
 
-        self.following_cnt = "0"
-        self.followers_cnt = "0"
-        self.user_id = None
-
+        # Media detection
         try:
-            media_containers = card.find_elements(
+            media_elements = card.find_elements(
                 "xpath",
-                './/div[@data-testid="tweetPhoto"] | '
-                './/div[@data-testid="videoPlayer"] | '
-                './/div[contains(@data-testid, "videoComponent")]'
+                '''
+                .//div[@data-testid="tweetPhoto"] |
+                .//div[@data-testid="videoPlayer"] |
+                .//div[contains(@data-testid, "video")] |
+                .//img[contains(@src, "twimg.com/media/")] |
+                .//img[contains(@src, "ext_tw_video_thumb")] |
+                .//video[contains(@src, "twimg.com")] |
+                .//*[@data-testid="card.layoutLarge.media"] |
+                .//*[@aria-label="Embedded image"] |
+                .//*[@aria-label="Embedded video"]
+                '''
             )
-            
-            media_urls = card.find_elements(
-                "xpath",
-                './/img[contains(@src, "twimg.com/media/")] | '
-                './/img[contains(@src, "ext_tw_video_thumb")] | '
-                './/video[contains(@src, "twimg.com")]'
-            )
-
-            self.has_media = 1 if (media_containers or media_urls) else 0
+            self.has_media = 1 if media_elements else 0
         except Exception:
             self.has_media = 0
 
+        # Poster details (if requested)
+        self.following_cnt = "0"
+        self.followers_cnt = "0"
+        self.user_id = None
 
         if scrape_poster_details:
             el_name = card.find_element(

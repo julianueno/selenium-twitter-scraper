@@ -71,8 +71,8 @@ class Tweet:
             
             for element in elements:
                 try:
-                    if element.tag_name == "img" and "emoji" in element.get_attribute("src", ""):
-                        self.content += element.get_attribute("alt", "")
+                    if element.tag_name == "img" and "emoji" in element.get_attribute("src"):
+                        self.content += element.get_attribute("alt")
                     else:
                         self.content += safe_extract_text(element)
                 except:
@@ -113,7 +113,7 @@ class Tweet:
         # Emojis
         try:
             self.emojis = [
-                unicodedata.normalize('NFC', emoji.get_attribute("alt", ""))
+                unicodedata.normalize('NFC', emoji.get_attribute("alt"))
                 for emoji in card.find_elements("xpath", '(.//div[@data-testid="tweetText"])[1]/img[contains(@src, "emoji")]')
             ]
         except NoSuchElementException:
